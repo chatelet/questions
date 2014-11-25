@@ -5,6 +5,11 @@ require 'sqlite3'
 class QuestionsDatabase < SQLite3::Database
   include Singleton
 
+  def self.execute(sql, *bindings)
+    puts sql
+    instance.execute(sql, *bindings)
+  end
+
   def initialize
     super('questions.db')
 
@@ -13,6 +18,66 @@ class QuestionsDatabase < SQLite3::Database
     self.type_translation = true
   end
 end
+
+#save(q1,q1.instance_variables.map {|i| i.to_s})
+
+def save(instance)
+  class_name = instance.class.to_s
+  table_name = ""
+    case class_name
+    when "User"
+      table_name = 'users'
+    when "Question"
+      table_name ='questions'
+    when "Reply"
+      table_name = 'replies'
+    when "QuestionLike"
+      table_name = 'question_likes'
+    when "QuestionFollower"
+      table_name = 'question_followers'
+    end
+
+
+
+  result = QuestionsDatabase.execute(<<-SQL, instance.id)
+    SELECT id
+    FROM #{table_name}
+    WHERE id = ?
+  SQL
+
+  column_names = instance.instance_variables.map {|el| el.to_s }
+  tmp = column_names.shift
+
+  column_names.map! {|el| el.split('')[1..-1].join }
+
+  column_count = column_names.count
+  q_marks = []
+  column_count.times do
+    q_marks << '?'
+  end
+  arguments = column_names.map {|el| "'#{instance.send(el)}'" }
+
+  set_now = column_names.map.with_index{|el, ind|"#{el} = #{arguments[ind]}"}.join(', ')
+
+  argu = arguments.join(', ')
+
+
+  if result.empty?
+    QuestionsDatabase.execute(<<-SQL)
+      INSERT INTO #{table_name} (#{column_names.join(', ')})
+      VALUES (#{argu })
+    SQL
+    instance.id = QuestionsDatabase.instance.last_insert_row_id
+  else
+    QuestionsDatabase.execute(<<-SQL, instance.id)
+      UPDATE #{table_name}
+      SET #{set_now}
+      WHERE id = ?
+    SQL
+  end
+  nil
+end
+
 
 class User
   attr_accessor :id, :fname, :lname
